@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="2">
+    <name>test_control_toolbox_mpc</name>
+    <version>0.0.0</version>
+    <description>The test_control_toolbox package</description>
+    <maintainer email="1003970864@qq.com">huakang</maintainer>
+
+    <license>BSD</license>
+
+    <buildtool_depend>catkin</buildtool_depend>
+    <depend>roscpp</depend>
+    <depend>roslint</depend>
+    <depend>dynamic_reconfigure</depend>
+    <depend>message_generation</depend>
+    <depend>message_runtime</depend>
+    <depend>std_msgs</depend>
+    <depend>ct_optcon</depend>
+    <depend>blasfeo</depend>
+    <depend>hpipm</depend>
+
+    <!-- export other .xml file-->
+    <export>
+
+    </export>
+</package>
