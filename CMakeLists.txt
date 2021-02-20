@@ -28,6 +28,7 @@ generate_dynamic_reconfigure_options(
 add_message_files(
     FILES
     TestMPC.msg
+    TestWIPSystem.msg
 )
 
 generate_messages(
@@ -59,11 +60,20 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(test_control_toolbox src/test_control_toolbox.cpp)
-target_link_libraries(test_control_toolbox PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES})
+#add_executable(test_control_toolbox src/test_control_toolbox.cpp)
+#target_link_libraries(test_control_toolbox PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES})
+#
+#add_executable(test_mpc src/test_mpc.cpp)
+#add_dependencies(test_mpc ${PROJECT_NAME}_gencfg)
+#target_link_libraries(test_mpc PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES} ${catkin_LIBRARIES})
+#
+#add_executable(test_LTISystem src/test_LTISystem.cpp)
+#target_link_libraries(test_LTISystem PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES} ${catkin_LIBRARIES})
 
-add_executable(test_mpc src/test_mpc.cpp)
-add_dependencies(test_mpc ${PROJECT_NAME}_gencfg)
-target_link_libraries(test_mpc PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(test_WIPSystem src/test_WIPSystem.cpp)
+target_link_libraries(test_WIPSystem PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES} ${catkin_LIBRARIES})
+
+#add_executable(test_load_setting_in_file src/test_load_setting_in_file.cpp)
+#target_link_libraries(test_load_setting_in_file PUBLIC ct_optcon ${BLASFEO_LIBRARIES} ${HPIPM_LIBRARIES} ${catkin_LIBRARIES})
 
 roslint_cpp()

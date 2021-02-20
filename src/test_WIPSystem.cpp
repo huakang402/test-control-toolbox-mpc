@@ -1,56 +1,70 @@
 //
-// Created by huakang on 2021/2/9.
+// Created by huakang on 2021/2/18.
 //
+
 #include <ct/optcon/optcon.h>
 #include <ros/ros.h>
-#include <dynamic_reconfigure/server.h>
-#include <test_control_toolbox_mpc/test_mpcConfig.h>
-#include <test_control_toolbox_mpc/TestMPC.h>
+#include <test_control_toolbox_mpc/TestWIPSystem.h>
 
 using namespace ct::core;
 using namespace ct::optcon;
 
 int main(int argc, char **argv) {
   // ros
-  ros::init(argc, argv, "test_mpc_node");
+  ros::init(argc, argv, "test_wip_node");
   ros::NodeHandle nh;
-  ros::Publisher state_pub = nh.advertise<test_control_toolbox_mpc::TestMPC>("control_data", 1000);;
+  ros::Publisher state_pub = nh.advertise<test_control_toolbox_mpc::TestWIPSystem>("WIPSystem_data", 1000);;
   ros::Rate loop_rate(10);
 
-  // mpc
-  const size_t state_dim = ct::core::SecondOrderSystem::STATE_DIM;
-  const size_t control_dim = ct::core::SecondOrderSystem::CONTROL_DIM;
+  const size_t STATE_DIM = 5;
+  const size_t CONTROL_DIM = 5;
+  StateMatrix<STATE_DIM> A_continuous;
+  ControlMatrix<CONTROL_DIM> B_continuous;
+  double t1{}, t2{}, t3{}, t4{}, t5{};
+  t1 = nh.param("t1", 5.9394);
+  t2 = nh.param("t2", -0.602);
+  t3 = nh.param("t3", 0.0353);
+  t4 = nh.param("t4", 0.1305);
+  t5 = nh.param("t5", 0.5);
 
-  double w_n = 0.5;
-  double zeta = 10.0;
-  std::shared_ptr<ct::core::ControlledSystem<state_dim, control_dim>>
-      oscillatorDynamics(new ct::core::SecondOrderSystem(w_n, zeta));
+  A_continuous << 0, 1, 0, 0, 0,
+      t1, 0, 0, 0, 0,
+      t2, 0, 0, 1.0, 0,
+      0, 0, 0, 0, 1,
+      0, 0, 0, 0, 0;
+  B_continuous << 0, 0, 0, 0, 0,
+      t3, 0, 0, 0, 0,
+      t4, 0, 0, 0, 0,
+      0, 0, 0, 0, 0,
+      0, t5, 0, 0, 0;
+  StateMatrix<STATE_DIM> &A = A_continuous;
+  ControlMatrix<CONTROL_DIM> &B = B_continuous;
 
-  std::shared_ptr<ct::core::SystemLinearizer<state_dim, control_dim>>
-      adLinearizer(new ct::core::SystemLinearizer<state_dim, control_dim>(oscillatorDynamics));
+  // Set initial conditions
+  StateVector<STATE_DIM> x0;
+  x0 << -10.0, 0., 0., 0., 0.;
 
-  std::shared_ptr<ct::optcon::TermQuadratic<state_dim, control_dim>>
-      intermediateCost(new ct::optcon::TermQuadratic<state_dim, control_dim>());
-  std::shared_ptr<ct::optcon::TermQuadratic<state_dim, control_dim>>
-      finalCost(new ct::optcon::TermQuadratic<state_dim, control_dim>());
+  std::shared_ptr<ct::core::ControlledSystem<STATE_DIM, CONTROL_DIM>>
+      wipSystem(new ct::core::LTISystem<STATE_DIM, CONTROL_DIM>(A, B));
+  std::shared_ptr<ct::optcon::TermQuadratic<STATE_DIM, CONTROL_DIM>>
+      intermediateCost(new ct::optcon::TermQuadratic<STATE_DIM, CONTROL_DIM>());
+  std::shared_ptr<ct::optcon::TermQuadratic<STATE_DIM, CONTROL_DIM>>
+      finalCost(new ct::optcon::TermQuadratic<STATE_DIM, CONTROL_DIM>());
   bool verbose = true;
   intermediateCost->loadConfigFile("/home/huakang/catkin_ws/src/test_control_toolbox_mpc/info/mpcCost.info",
                                    "intermediateCost", verbose);
   finalCost->loadConfigFile("/home/huakang/catkin_ws/src/test_control_toolbox_mpc/info/mpcCost.info",
                             "finalCost", verbose);
 
-  std::shared_ptr<CostFunctionQuadratic<state_dim, control_dim>>
-      costFunction(new CostFunctionAnalytical<state_dim, control_dim>());
+  std::shared_ptr<CostFunctionQuadratic<STATE_DIM, CONTROL_DIM>>
+      costFunction(new CostFunctionAnalytical<STATE_DIM, CONTROL_DIM>());
   costFunction->addIntermediateTerm(intermediateCost);
   costFunction->addFinalTerm(finalCost);
 
-  StateVector<state_dim> x0;
-  x0.setRandom();
-
   ct::core::Time timeHorizon = 3.0;
 
-  ContinuousOptConProblem<state_dim, control_dim> optConProblem(
-      timeHorizon, x0, oscillatorDynamics, costFunction, adLinearizer);
+  ContinuousOptConProblem<STATE_DIM, CONTROL_DIM>
+      optConProblem(timeHorizon, x0, wipSystem, costFunction);
 
   NLOptConSettings ilqr_settings;
   ilqr_settings.dt = 0.01;  // the control discretization in [sec]
@@ -64,21 +78,21 @@ int main(int argc, char **argv) {
 
   size_t K = ilqr_settings.computeK(timeHorizon);
 
-  FeedbackArray<state_dim, control_dim> u0_fb(K, FeedbackMatrix<state_dim, control_dim>::Zero());
-  ControlVectorArray<control_dim> u0_ff(K, ControlVector<control_dim>::Zero());
-  StateVectorArray<state_dim> x_ref_init(K + 1, x0);
-  NLOptConSolver<state_dim, control_dim>::Policy_t initController(x_ref_init, u0_ff, u0_fb, ilqr_settings.dt);
+  FeedbackArray<STATE_DIM, CONTROL_DIM> u0_fb(K, FeedbackMatrix<STATE_DIM, CONTROL_DIM>::Zero());
+  ControlVectorArray<CONTROL_DIM> u0_ff(K, ControlVector<CONTROL_DIM>::Zero());
+  StateVectorArray<STATE_DIM> x_ref_init(K + 1, x0);
+  NLOptConSolver<STATE_DIM, CONTROL_DIM>::Policy_t initController(x_ref_init, u0_ff, u0_fb, ilqr_settings.dt);
 
 
   // create an NLOptConSolver instance
-  NLOptConSolver<state_dim, control_dim> iLQR(optConProblem, ilqr_settings);
+  NLOptConSolver<STATE_DIM, CONTROL_DIM> iLQR(optConProblem, ilqr_settings);
 
   // set the initial guess
   iLQR.setInitialGuess(initController);
 
   // solve the optimal control problem and retrieve the solution
   iLQR.solve();
-  ct::core::StateFeedbackController<state_dim, control_dim> initialSolution = iLQR.getSolution();
+  ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> initialSolution = iLQR.getSolution();
 
   // settings for the iLQR instance used in MPC, use the same settings
   NLOptConSettings ilqr_settings_mpc = ilqr_settings;
@@ -98,7 +112,7 @@ int main(int argc, char **argv) {
 
 
   // Create the iLQR-MPC object, based on the optimal control problem and the selected settings.
-  MPC<NLOptConSolver<state_dim, control_dim>> ilqr_mpc(optConProblem, ilqr_settings_mpc, mpc_settings);
+  MPC<NLOptConSolver<STATE_DIM, CONTROL_DIM>> ilqr_mpc(optConProblem, ilqr_settings_mpc, mpc_settings);
 
   // initialize it using the previously computed initial controller
   ilqr_mpc.setInitialGuess(initialSolution);
@@ -112,7 +126,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < maxNumRuns; i++) {
       // let's for simplicity, assume that the "measured" state is the first state from the optimal trajectory plus some noise
       if (i > 0)
-        x0 = 0.1 * StateVector<state_dim>::Random();
+        x0 = 0.1 * StateVector<STATE_DIM>::Random();
 
       // time which has passed since start of MPC
       auto current_time = std::chrono::high_resolution_clock::now();
@@ -123,14 +137,18 @@ int main(int argc, char **argv) {
       ilqr_mpc.prepareIteration(t);
 
       // new optimal policy
-      ct::core::StateFeedbackController<state_dim, control_dim> newPolicy;
+      ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> newPolicy;
 
       // publish feedback data
-      ct::core::StateFeedbackController<state_dim, control_dim> solution = iLQR.getSolution();
-      test_control_toolbox_mpc::TestMPC data;
-      data.pos = solution.x_ref()[i][0];
-      data.vel = solution.x_ref()[i][1];
-      data.uff = solution.uff()[i][0];
+      ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> solution = iLQR.getSolution();
+      test_control_toolbox_mpc::TestWIPSystem data;
+      data.x_alpha = solution.x_ref()[i](0);
+      data.x_alpha_dot = solution.x_ref()[i](1);
+      data.x_vel = solution.x_ref()[i](2);
+      data.x_theta = solution.x_ref()[i](3);
+      data.x_theta_dot = solution.x_ref()[i](4);
+      data.u_vel = solution.uff()[i](0);
+      data.u_w = solution.uff()[i](1);
       state_pub.publish(data);
 
       // timestamp of the new optimal policy

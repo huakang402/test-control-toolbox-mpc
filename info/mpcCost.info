@@ -2,25 +2,31 @@ intermediateCost
 {
     name "intermediate cost quadratic"
     kind "quadratic"   
-    type 0              ; 0 = intermediate, 1 = final
+    type 0; 0 = intermediate, 1 = final
 
     weights
     {
       Q
       {
         scaling 1.0
-        (0,0) 0
-        (1,1) 0.1
+        (0,0) 50
+        (1,1) 5
+        (2,2) 0.5
+        (3,3) 0.5
+        (4,4) 0.5
       }
       R
       {
         scaling 1
-        (0,0) 1
+        (0,0) 0.1
       }
       x_des
       {
-        (0,0) 0
-        (1,0) 0
+        (0,0) 2
+        (1,0) 3
+        (2,0) 4
+        (3,0) 5
+        (4,0) 6
       }
     }
 }
@@ -30,15 +36,18 @@ finalCost
 {
     name "final cost quadratic"
     kind "quadratic"   
-    type 1              ; 0 = intermediate, 1 = final
+    type 1; 0 = intermediate, 1 = final
 
     weights
     {
       Q
       {
         scaling 10.0
-        (0,0) 1.0
-        (1,1) 1.0
+        (0,0) 10
+        (1,1) 1
+        (2,2) 0.1
+        (3,3) 0.1
+        (4,4) 0.1
       }
       R
       {
@@ -48,7 +57,10 @@ finalCost
       x_des
       {
         (0,0) 2
-        (1,0) 0
+        (1,0) 3
+        (2,0) 4
+        (3,0) 5
+        (4,0) 6
       }
     }
 }

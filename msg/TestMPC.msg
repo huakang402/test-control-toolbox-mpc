@@ -1,3 +1,3 @@
-float64 x_ref
-float64[] uff
-float64[] k
+float64 pos
+float64 vel
+float64 uff
