@@ -11,6 +11,7 @@ add_definitions(-Wall -Werror)
 find_package(ct_optcon REQUIRED)
 find_package(blasfeo REQUIRED)
 find_package(hpipm REQUIRED)
+
 find_package(
     catkin REQUIRED
     COMPONENTS
