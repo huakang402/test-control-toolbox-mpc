@@ -16,16 +16,17 @@ int main(int argc, char **argv) {
   ros::Publisher state_pub = nh.advertise<test_control_toolbox_mpc::TestWIPSystem>("WIPSystem_data", 1000);;
   ros::Rate loop_rate(10);
 
+  // set system
   const size_t STATE_DIM = 5;
   const size_t CONTROL_DIM = 2;
   StateMatrix<STATE_DIM> A_continuous;
   Eigen::Matrix<double, STATE_DIM, CONTROL_DIM> B_continuous;
   double t1{}, t2{}, t3{}, t4{}, t5{};
-  t1 = nh.param("t1", 38.4);
-  t2 = nh.param("t2", -3);
-  t3 = nh.param("t3", -0.2449);
-  t4 = nh.param("t4", 0.0816);
-  t5 = nh.param("t5", 0.5);
+  t1 = nh.param("t1", 78.482);
+  t2 = nh.param("t2", -34.592);
+  t3 = nh.param("t3", -0.396);
+  t4 = nh.param("t4", 1.737);
+  t5 = nh.param("t5", 67.667);
 
   A_continuous << 0, 1, 0, 0, 0,
       t1, 0, 0, 0, 0,
@@ -40,15 +41,17 @@ int main(int argc, char **argv) {
   StateMatrix<STATE_DIM> &A = A_continuous;
   Eigen::Matrix<double, STATE_DIM, CONTROL_DIM> &B = B_continuous;
 
+  std::string costFunctionFile = "/home/huakang/test_mpc_ws/src/test_control_toolbox_mpc/info/mpcCost.info";
+
   // Set initial conditions
   StateVector<STATE_DIM> x0;
-  x0 << 0., 0., 0., 0., 0.;
+  ct::core::loadMatrix(costFunctionFile, "x0", x0);
   // set initial control
   ControlVector<CONTROL_DIM> u0;
-  u0 << 1, 1;
+  ct::core::loadMatrix(costFunctionFile, "u0", u0);
   // set FeedbackMatrix
-  FeedbackMatrix<STATE_DIM, CONTROL_DIM> H;
-  H.setOnes();
+  FeedbackMatrix<STATE_DIM, CONTROL_DIM> FB_Matrix;
+  ct::core::loadMatrix(costFunctionFile, "K", FB_Matrix);
 
   std::shared_ptr<ct::core::ControlledSystem<STATE_DIM, CONTROL_DIM>>
       wipSystem(new ct::core::LTISystem<STATE_DIM, CONTROL_DIM>(A, B));
@@ -59,10 +62,8 @@ int main(int argc, char **argv) {
   std::shared_ptr<ct::optcon::TermQuadratic<STATE_DIM, CONTROL_DIM>>
       finalCost(new ct::optcon::TermQuadratic<STATE_DIM, CONTROL_DIM>());
   bool verbose = true;
-  intermediateCost->loadConfigFile("/home/huakang/catkin_ws/src/test_control_toolbox_mpc/info/mpcCost.info",
-                                   "intermediateCost", verbose);
-  finalCost->loadConfigFile("/home/huakang/catkin_ws/src/test_control_toolbox_mpc/info/mpcCost.info",
-                            "finalCost", verbose);
+  intermediateCost->loadConfigFile(costFunctionFile, "intermediateCost", verbose);
+  finalCost->loadConfigFile(costFunctionFile, "finalCost", verbose);
 
   std::shared_ptr<CostFunctionQuadratic<STATE_DIM, CONTROL_DIM>>
       costFunction(new CostFunctionAnalytical<STATE_DIM, CONTROL_DIM>());
@@ -112,7 +113,8 @@ int main(int argc, char **argv) {
 //  stateBoxConstraints->addIntermediateConstraint(stateBound, verbose);
 //  stateBoxConstraints->initialize();
 
-  ct::core::Time timeHorizon = 3.0;
+  ct::core::Time timeHorizon;
+  ct::core::loadScalar(costFunctionFile, "timeHorizon", timeHorizon);
 
   ContinuousOptConProblem<STATE_DIM, CONTROL_DIM>
       optConProblem(timeHorizon, x0, wipSystem, costFunction, adLinearizer);
@@ -122,10 +124,10 @@ int main(int argc, char **argv) {
 //  optConProblem.setStateBoxConstraints(stateBoxConstraints);
 
   NLOptConSettings ilqr_settings;
-  ilqr_settings.dt = 0.01;  // the control discretization in [sec]
+  ilqr_settings.dt = nh.param("dt", 0.01);  // the control discretization in [sec]
   ilqr_settings.integrator = ct::core::IntegrationType::EULERCT;
   ilqr_settings.discretization = NLOptConSettings::APPROXIMATION::FORWARD_EULER;
-  ilqr_settings.max_iterations = 10;
+  ilqr_settings.max_iterations = nh.param("ilqr_max_iterations", 10);
   ilqr_settings.nlocp_algorithm = NLOptConSettings::NLOCP_ALGORITHM::ILQR;
   ilqr_settings.lqocp_solver =
       NLOptConSettings::LQOCP_SOLVER::GNRICCATI_SOLVER;  // the LQ-problems are solved using a custom Gauss-Newton Riccati solver
@@ -133,7 +135,7 @@ int main(int argc, char **argv) {
 
   size_t K = ilqr_settings.computeK(timeHorizon);
 
-  FeedbackArray<STATE_DIM, CONTROL_DIM> u0_fb(K, H);
+  FeedbackArray<STATE_DIM, CONTROL_DIM> u0_fb(K, -FB_Matrix);
   ControlVectorArray<CONTROL_DIM> u0_ff(K, u0);
   StateVectorArray<STATE_DIM> x_ref_init(K + 1, x0);
   NLOptConSolver<STATE_DIM, CONTROL_DIM>::Policy_t initController(x_ref_init, u0_ff, u0_fb, ilqr_settings.dt);
@@ -146,25 +148,32 @@ int main(int argc, char **argv) {
 
   // solve the optimal control problem and retrieve the solution
   iLQR.solve();
+  ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> initialSolution = iLQR.getSolution();
+
+  StateVector<STATE_DIM> x_0;
+  int col = nh.param("col", 100);
+  x_0 = initialSolution.x_ref()[col];
+  std::cout << "size: " << initialSolution.x_ref().size() << std::endl;
+  std::cout << "x0: " << x0 << std::endl;
+  std::cout << "x_0: " << x_0 << std::endl;
 
   // publish data of iLQR
-  ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> initialSolution = iLQR.getSolution();
-  for (u_int i = 0; i < initialSolution.x_ref().size(); i++) {
-    test_control_toolbox_mpc::TestWIPSystem data;
-    data.x_alpha = initialSolution.x_ref()[i](0);
-    data.x_alpha_dot = initialSolution.x_ref()[i](1);
-    data.x_vel = initialSolution.x_ref()[i](2);
-    data.x_theta = initialSolution.x_ref()[i](3);
-    data.x_theta_dot = initialSolution.x_ref()[i](4);
-    data.u_vel = initialSolution.uff()[i](0);
-    data.u_w = initialSolution.uff()[i](1);
-    state_pub.publish(data);
-  }
+//  for (u_int i = 0; i < initialSolution.x_ref().size(); i++) {
+//    test_control_toolbox_mpc::TestWIPSystem data;
+//    data.x_alpha = initialSolution.x_ref()[i](0);
+//    data.x_alpha_dot = initialSolution.x_ref()[i](1);
+//    data.x_vel = initialSolution.x_ref()[i](2);
+//    data.x_theta = initialSolution.x_ref()[i](3);
+//    data.x_theta_dot = initialSolution.x_ref()[i](4);
+//    data.u_vel = initialSolution.uff()[i](0);
+//    data.u_w = initialSolution.uff()[i](1);
+//    state_pub.publish(data);
+//  }
 
   // settings for the iLQR instance used in MPC, use the same settings
   NLOptConSettings ilqr_settings_mpc = ilqr_settings;
   // limit the overall number of iLQR iterations (real-time iteration scheme)
-  ilqr_settings_mpc.max_iterations = 1;
+  ilqr_settings_mpc.max_iterations = nh.param("mpc_max_iterations", 10);
   // limited the printouts
   ilqr_settings_mpc.printSummary = false;
 
@@ -173,10 +182,9 @@ int main(int argc, char **argv) {
   mpc_settings.stateForwardIntegration_ = true;
   mpc_settings.postTruncation_ = true;
   mpc_settings.measureDelay_ = true;
-  mpc_settings.delayMeasurementMultiplier_ = 1.0;
+  mpc_settings.delayMeasurementMultiplier_ = nh.param("delayMeasurementMultiplier", 1.0);
   mpc_settings.mpc_mode = ct::optcon::MPC_MODE::FIXED_FINAL_TIME;
   mpc_settings.coldStart_ = false;
-
 
   // Create the iLQR-MPC object, based on the optimal control problem and the selected settings.
   MPC<NLOptConSolver<STATE_DIM, CONTROL_DIM>> ilqr_mpc(optConProblem, ilqr_settings_mpc, mpc_settings);
@@ -186,13 +194,13 @@ int main(int argc, char **argv) {
 
   auto start_time = std::chrono::high_resolution_clock::now();
 
-  size_t maxNumRuns = 100;
+  size_t maxNumRuns = nh.param("maxNumRuns", 100);
 
   std::cout << "Starting to run MPC" << std::endl;
   for (size_t i = 0; i < maxNumRuns; i++) {
     // let's for simplicity, assume that the "measured" state is the first state from the optimal trajectory plus some noise
-    if (i > 0)
-      x0 = 0.1 * StateVector<STATE_DIM>::Random();
+//    if (i > 0)
+//      x0 = 0.1 * StateVector<STATE_DIM>::Random();
 
     // time which has passed since start of MPC
     auto current_time = std::chrono::high_resolution_clock::now();
@@ -213,18 +221,18 @@ int main(int argc, char **argv) {
     bool success = ilqr_mpc.finishIteration(x0, t, newPolicy, ts_newPolicy);
 
     // publish data of MPC
-//    ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> solution = iLQR.getSolution();
-//    for (u_int j = 0; j < solution.x_ref().size(); j++) {
-//      test_control_toolbox_mpc::TestWIPSystem data;
-//      data.x_alpha = solution.x_ref()[j](0);
-//      data.x_alpha_dot = solution.x_ref()[j](1);
-//      data.x_vel = solution.x_ref()[j](2);
-//      data.x_theta = solution.x_ref()[j](3);
-//      data.x_theta_dot = solution.x_ref()[j](4);
-//      data.u_vel = solution.uff()[j](0);
-//      data.u_w = solution.uff()[j](1);
-//      state_pub.publish(data);
-//    }
+    ct::core::StateFeedbackController<STATE_DIM, CONTROL_DIM> solution = iLQR.getSolution();
+    for (u_int j = 0; j < 500; j++) {
+      test_control_toolbox_mpc::TestWIPSystem data;
+      data.x_alpha = solution.x_ref()[j](0);
+      data.x_alpha_dot = solution.x_ref()[j](1);
+      data.x_vel = solution.x_ref()[j](2);
+      data.x_theta = solution.x_ref()[j](3);
+      data.x_theta_dot = solution.x_ref()[j](4);
+      data.u_vel = solution.uff()[j](0);
+      data.u_w = solution.uff()[j](1);
+      state_pub.publish(data);
+    }
 
     // break the loop in case the time horizon is reached or solve() failed
     if (ilqr_mpc.timeHorizonReached() | !success)

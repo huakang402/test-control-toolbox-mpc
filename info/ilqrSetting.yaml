@@ -1,0 +1,11 @@
+dt: 0.01
+ilqr_max_iterations: 10
+
+mpc_max_iterations: 1
+delayMeasurementMultiplier: 1.0
+
+maxNumRuns: 100
+
+col: 500
+
+
