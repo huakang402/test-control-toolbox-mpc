@@ -13,13 +13,14 @@ find_package(blasfeo REQUIRED)
 find_package(hpipm REQUIRED)
 
 find_package(
-    catkin REQUIRED
-    COMPONENTS
-    roscpp
-    roslint
-    dynamic_reconfigure
-    message_generation
-    std_msgs
+        catkin REQUIRED
+        COMPONENTS
+        roscpp
+        roslint
+        dynamic_reconfigure
+        message_generation
+        std_msgs
+        trajectory_msgs
 )
 
 generate_dynamic_reconfigure_options(
@@ -38,20 +39,21 @@ generate_messages(
 )
 
 catkin_package(
-    INCLUDE_DIRS
-    include
-    LIBRARIES
-    test_control_toolbox_mpc
-    catkin_DEPENDS
-    roscpp
-    roslint
-    dynamic_reconfigure
-    message_runtime
-    std_msgs
-    ct_optcon
-    blasfeo
-    hpipm
-    DEPENDS
+        INCLUDE_DIRS
+        include
+        LIBRARIES
+        test_control_toolbox_mpc
+        catkin_DEPENDS
+        roscpp
+        roslint
+        dynamic_reconfigure
+        message_runtime
+        std_msgs
+        ct_optcon
+        blasfeo
+        hpipm
+        trajectory_msgs
+        DEPENDS
 )
 
 include_directories(
